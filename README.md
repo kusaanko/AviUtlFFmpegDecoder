@@ -42,7 +42,7 @@
 ファイル構造  
 aviutl  
 ├Plugins/  
-│  └AviUtlFFmpegDecoder.auf  
+│  └AviUtlFFmpegDecoder.aui  
 ├aviutl.exe  
 ├avcodec-58.dll  
 ├avdevice-58.dll  
