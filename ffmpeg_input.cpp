@@ -120,12 +120,30 @@ std::vector<std::string> split_str(std::string str, std::string delim) {
 	return vec;
 }
 
+char *get_exe_dir() {
+	char Path[MAX_PATH + 1];
+	if (0 != GetModuleFileName(NULL, Path, MAX_PATH)) {
+
+		char drive[MAX_PATH + 1]
+			, dir[MAX_PATH + 1]
+			, fname[MAX_PATH + 1]
+			, ext[MAX_PATH + 1];
+
+		_splitpath_s(Path, drive, dir, fname, ext);
+
+		return dir;
+	}
+	return ".";
+}
+
 void reload_config() {
 	int ret = 0;
 	decoder_redirect.clear();
 	char ch[3000] = "";
 	FILE* file;
-	ret = fopen_s(&file, "ffmpeg_decoder.ini", "r");
+	char file_path[300];
+	sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
+	ret = fopen_s(&file, file_path, "r");
 	if (ret == 0 && file) {
 		std::string text = "";
 		while ((ret = fscanf_s(file, "%s", ch, sizeof(ch))) != EOF) {
@@ -459,12 +477,14 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	int pos = 0;
 	char ch[3000];
 	FILE* file;
+	char file_path[300];
+	sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
 	switch (msg)
 	{
 	case WM_CLOSE:
 		GetDlgItemText(hWnd, IDC_EDIT1,
 			(LPTSTR)ch, (int)sizeof(ch));
-		ret = fopen_s(&file, "ffmpeg_decoder.ini", "w");
+		ret = fopen_s(&file, file_path, "w");
 		if (ret == 0 && file) {
 			fprintf(file, "%s", ch);
 			fclose(file);
@@ -473,7 +493,7 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		EndDialog(hWnd, IDD_DIALOG1);
 		return TRUE;
 	case WM_INITDIALOG:
-		ret = fopen_s(&file, "ffmpeg_decoder.ini", "r");
+		ret = fopen_s(&file, file_path, "r");
 		if (ret == 0 && file) {
 			std::string data = "";
 			while ((ret = fscanf_s(file, "%s", ch, sizeof(ch))) != EOF) {
@@ -499,7 +519,7 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				pos = data.find("\r", pos);
 			}
 			FILE* file;
-			ret = fopen_s(&file, "ffmpeg_decoder.ini", "w");
+			ret = fopen_s(&file, file_path, "w");
 			if (ret == 0 && file) {
 				fprintf(file, "%s", data.c_str());
 				fclose(file);
