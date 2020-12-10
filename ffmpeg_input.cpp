@@ -326,8 +326,6 @@ int func_read_video( INPUT_HANDLE ih,int frame,void *buf )
 
 bool grab_audio(FILE_HANDLE* fp) {
 	av_frame_unref(fp->audio_frame);
-	AVRational rational = { 1, fp->audio_codec_context->sample_rate };
-	AVRational time_base = { 1, AV_TIME_BASE };
 	//複数フレームが含まれる場合があるので残っていればデコード
 	if (avcodec_receive_frame(fp->audio_codec_context, fp->audio_frame) == 0) {
 		if (fp->audio_seek) {
