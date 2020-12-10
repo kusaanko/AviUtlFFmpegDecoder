@@ -1,0 +1,5 @@
+LIBRARY ffmpeg_input
+
+EXPORTS
+	GetInputPluginTable @1
+
