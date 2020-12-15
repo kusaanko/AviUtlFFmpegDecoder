@@ -94,8 +94,6 @@ typedef struct FileHandle{
 	uint8_t *swr_buf;
 	int64_t audio_now_timestamp;
 	int64_t audio_next_timestamp;
-	int64_t video_now_timestamp;
-	int64_t video_next_timestamp;
 	int64_t video_now_frame;
 	bool need_resample;
 	int64_t samples_start_gap;
@@ -278,9 +276,7 @@ bool grab(FILE_HANDLE* fp) {
 				return false;
 			}
 			if (avcodec_receive_frame(fp->video_codec_context, fp->frame) == 0) {
-				fp->video_now_frame = (int64_t)(((fp->frame->pts) * av_q2d(fp->video_stream->time_base) - (fp->format_context->start_time * av_q2d(time_base))) * av_q2d(fp->video_stream->avg_frame_rate));
-				fp->video_now_timestamp = fp->video_next_timestamp;
-				fp->video_next_timestamp = fp->video_now_timestamp + 1;
+				fp->video_now_frame = (int64_t)(((fp->frame->pts - fp->video_stream->start_time) * av_q2d(fp->video_stream->time_base)) * av_q2d(fp->video_stream->avg_frame_rate) + 0.5);
 				return true;
 			}
 		}
@@ -315,7 +311,7 @@ int func_read_video( INPUT_HANDLE ih,int frame,void *buf )
 	FILE_HANDLE* fp = (FILE_HANDLE*)ih;
 	if (!fp->video_stream) return 0;
 	uint64_t skip = frame - fp->video_now_frame;
-	if (skip > 10 || skip < 0) {
+	if (skip > 100 || skip < 0) {
 		seek(fp, frame);
 		skip = 0;
 	}
@@ -628,8 +624,6 @@ INPUT_HANDLE func_open(LPSTR file)
 		}
 		fp->fps = fp->video_stream->r_frame_rate.num / fp->video_stream->r_frame_rate.den;
 		fp->frame = av_frame_alloc();
-		fp->video_now_timestamp = 0;
-		fp->video_next_timestamp = fp->audio_now_timestamp + 1;
 	}
 	goto audio_2;
 audio:
