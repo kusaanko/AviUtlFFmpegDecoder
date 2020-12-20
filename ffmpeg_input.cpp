@@ -730,6 +730,9 @@ audio_2:
 	}
 	fp->packet = av_packet_alloc();
 	av_init_packet(fp->packet);
+	if (fp->video) {
+		grab(fp);
+	}
 	return fp;
 reset:
 	file_handle_free(fp);
