@@ -30,6 +30,7 @@ extern "C" {
 #include <map>
 #include <vector>
 #include <chrono>
+#include <regex>
 
 #define VIDEO_EXT "*.avi;*.mov;*.wmv;*.mp4;*.webm;*.mkv;*.flv;*.264;*.mpeg;*.ts;*.mts;*.m2ts;"
 #define AUDIO_EXT "*.mp3;*.ogg;*.wav;*.aac;*.wma;*.m4a;*.webm;*.opus;"
@@ -99,10 +100,12 @@ typedef struct FileHandle{
 	int64_t samples_start_gap;
 	int samples_return;
 	bool audio_seek = false;
+	bool yuy2 = false;
 } FILE_HANDLE;
 
 uint8_t *swr_buf = 0;
 std::map<std::string, std::string> decoder_redirect{};
+bool is_output_yuy2 = false;
 char ch[100];
 AVRational time_base = { 1, AV_TIME_BASE };
 
@@ -134,7 +137,28 @@ char *get_exe_dir() {
 	return ".";
 }
 
-void reload_config() {
+const char* read_config(char* section, char* key, char* default_str) {
+	char ret[256];
+	char file_path[600];
+	sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
+	GetPrivateProfileString(section, key, default_str, ret, sizeof(ret), file_path);
+	std::string ret_str = std::regex_replace(ret, std::regex("\\\\n"), "\n");
+	ret_str = std::regex_replace(ret_str, std::regex("\n"), "\r\n");
+	return ret_str.c_str();
+}
+
+char* save_config(char* section, char* key, const char* value) {
+	char ret[256];
+	char file_path[600];
+	std::string data = std::regex_replace(value, std::regex("\r"), "");
+	data = std::regex_replace(data, std::regex("\n"), "\\n");
+	sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
+	WritePrivateProfileString(section, key, data.c_str(), file_path);
+	return ret;
+}
+
+//古いタイプのコンフィグファイルを新しいタイプに移行
+void migrate_config() {
 	int ret = 0;
 	decoder_redirect.clear();
 	char ch[3000] = "";
@@ -143,31 +167,58 @@ void reload_config() {
 	sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
 	ret = fopen_s(&file, file_path, "r");
 	if (ret == 0 && file) {
+		bool is_old_config = true;
 		std::string text = "";
 		while ((ret = fscanf_s(file, "%s", ch, sizeof(ch))) != EOF) {
 			ch[sizeof(ch) - 1] = '\0';
+			std::string content = ch;
 			text += ch;
-			text += '\n';
+			text += "\\n";
+			if (content.find("[") == 0) {
+				is_old_config = false;
+			}
 		}
 		fclose(file);
-		std::vector<std::string> split = split_str(text, "\n");
-		for (unsigned int i = 0;i < split.size();i++) {
-			std::string split_str = split[i];
-			int pos = split_str.find("\r");
-			if (pos != std::string::npos) {
-				split_str = split_str.replace(pos, 1, "");
+		if (is_old_config) {
+			FILE* file;
+			ret = fopen_s(&file, file_path, "w");
+			if (ret == 0 && file) {
+				fprintf(file, "");
+				fclose(file);
 			}
-			pos = split_str.find("\n");
-			if (pos != std::string::npos) {
-				split_str = split_str.replace(pos, 1, "");
-			}
-			pos = split_str.find("=");
-			if (pos != std::string::npos) {
-				std::string key = split_str.substr(0, pos);
-				std::string value = split_str.substr(pos + 1, split_str.size() - (pos + 1));
-				decoder_redirect.emplace(key, value);
-			}
+			save_config("decoder", "replace", text.c_str());
 		}
+	}
+}
+
+void reload_config() {
+	decoder_redirect.clear();
+	std::string text = read_config("decoder", "replace", "");
+	std::vector<std::string> split = split_str(text, "\n");
+	for (unsigned int i = 0;i < split.size();i++) {
+		std::string split_str = split[i];
+		int pos = split_str.find("\r");
+		if (pos != std::string::npos) {
+			split_str = split_str.replace(pos, 1, "");
+		}
+		pos = split_str.find("\n");
+		if (pos != std::string::npos) {
+			split_str = split_str.replace(pos, 1, "");
+		}
+		pos = split_str.find("=");
+		if (pos != std::string::npos) {
+			std::string key = split_str.substr(0, pos);
+			std::string value = split_str.substr(pos + 1, split_str.size() - (pos + 1));
+			decoder_redirect.emplace(key, value);
+		}
+	}
+
+	const char *data = read_config("decoder", "yuy2", "true");
+	if (!strcmp(data, "true")) {
+		is_output_yuy2 = true;
+	}
+	else {
+		is_output_yuy2 = false;
 	}
 }
 
@@ -177,6 +228,7 @@ void reload_config() {
 BOOL func_init( void )
 {
 	swr_buf = (uint8_t*)malloc(2048 * 4);
+	migrate_config();
 	reload_config();
 	return TRUE;
 }
@@ -242,6 +294,9 @@ BOOL func_info_get( INPUT_HANDLE ih,INPUT_INFO *iip )
 		header->biWidth = fp->video_codec_context->width;
 		header->biHeight = fp->video_codec_context->height;
 		header->biBitCount = 24;
+		if (fp->yuy2) {
+			header->biCompression = MAKEFOURCC('Y', 'U', 'Y', '2');
+		}
 		iip->flag |= INPUT_INFO_FLAG_VIDEO | INPUT_INFO_FLAG_VIDEO_RANDOM_ACCESS;
 		iip->rate = fp->video_stream->avg_frame_rate.num;
 		iip->scale = fp->video_stream->avg_frame_rate.den;
@@ -325,12 +380,21 @@ int func_read_video( INPUT_HANDLE ih,int frame,void *buf )
 	int output_linesize = width * 3;//width * BGR(3)
 	int output_size = output_linesize * height;
 
-	uint8_t* dst_data[4] = { (uint8_t*)buf + output_linesize * (height - 1), NULL, NULL, NULL };
-	int      dst_linesize[4] = { -(output_linesize), 0, 0, 0 };
-	output_size = sws_scale(fp->sws_ctx, (const uint8_t* const*)fp->frame->data, fp->frame->linesize, 0, fp->frame->height, dst_data, dst_linesize);
-
 	int output_rowsize = fp->frame->width * 3;
-	return fp->frame->width * fp->frame->height * 3;
+	if (fp->yuy2) {
+		uint8_t* dst_data[4] = { (uint8_t*)buf, NULL, NULL, NULL };
+		int      dst_linesize[4] = { width * 2, 0, 0, 0 };
+		output_size = sws_scale(fp->sws_ctx, (const uint8_t* const*)fp->frame->data, fp->frame->linesize, 0, fp->frame->height, dst_data, dst_linesize);
+
+		return width * height * 2;
+	}
+	else {
+		uint8_t* dst_data[4] = { (uint8_t*)buf + output_linesize * (height - 1), NULL, NULL, NULL };
+		int      dst_linesize[4] = { -(output_linesize), 0, 0, 0 };
+		output_size = sws_scale(fp->sws_ctx, (const uint8_t* const*)fp->frame->data, fp->frame->linesize, 0, fp->frame->height, dst_data, dst_linesize);
+
+		return fp->frame->width * fp->frame->height * 3;
+	}
 }
 
 
@@ -472,33 +536,22 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	int ret = 0;
 	int pos = 0;
 	char ch[3000];
-	FILE* file;
-	char file_path[300];
-	sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
+	std::string data;
 	switch (msg)
 	{
 	case WM_CLOSE:
 		GetDlgItemText(hWnd, IDC_EDIT1,
 			(LPTSTR)ch, (int)sizeof(ch));
-		ret = fopen_s(&file, file_path, "w");
-		if (ret == 0 && file) {
-			fprintf(file, "%s", ch);
-			fclose(file);
-			reload_config();
-		}
+		save_config("decoder", "replace", ch);
+		reload_config();
 		EndDialog(hWnd, IDD_DIALOG1);
 		return TRUE;
 	case WM_INITDIALOG:
-		ret = fopen_s(&file, file_path, "r");
-		if (ret == 0 && file) {
-			std::string data = "";
-			while ((ret = fscanf_s(file, "%s", ch, sizeof(ch))) != EOF) {
-				ch[sizeof(ch) - 1] = '\0';
-				data += ch;
-				data += "\r\n";
-			}
-			fclose(file);
-			SetDlgItemText(hWnd, IDC_EDIT1, (LPCTSTR)data.c_str());
+		data = read_config("decoder", "replace", "");
+		SetDlgItemText(hWnd, IDC_EDIT1, data.c_str());
+		data = read_config("decoder", "yuy2", "true");
+		if (data == "true") {
+			CheckDlgButton(hWnd, IDC_CHECK1, BST_CHECKED);
 		}
 		return TRUE;
 	case WM_COMMAND:
@@ -508,19 +561,14 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case IDC_BUTTON1:
 			GetDlgItemText(hWnd, IDC_EDIT1,
 				(LPTSTR)ch, (int)sizeof(ch));
-			std::string data = ch;
-			pos = data.find("\r");
-			while (pos != std::string::npos) {
-				data.replace(pos, 1, "");
-				pos = data.find("\r", pos);
+			save_config("decoder", "replace", ch);
+			if(IsDlgButtonChecked(hWnd, IDC_CHECK1)) {
+				save_config("decoder", "yuy2", "true");
 			}
-			FILE* file;
-			ret = fopen_s(&file, file_path, "w");
-			if (ret == 0 && file) {
-				fprintf(file, "%s", data.c_str());
-				fclose(file);
-				reload_config();
+			else {
+				save_config("decoder", "yuy2", "false");
 			}
+			reload_config();
 			EndDialog(hWnd, IDD_DIALOG1);
 			break;
 		}
@@ -531,8 +579,6 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 BOOL func_config( HWND hwnd,HINSTANCE dll_hinst )
 {
 	DialogBox(dll_hinst, MAKEINTRESOURCE(IDD_DIALOG1), NULL, DialogProc);
-
-	//	DLLを開放されても設定が残るように保存しておいてください。
 
 	return TRUE;
 }
@@ -612,11 +658,23 @@ INPUT_HANDLE func_open(LPSTR file)
 			OutputDebugString("avcodec_open2 failed\n");
 			goto audio;
 		}
+		AVPixelFormat pix_format = AV_PIX_FMT_BGR24;
+		if (is_output_yuy2) {
+			AVPixelFormat video_fmt = fp->video_codec_context->pix_fmt;
+			sprintf_s(ch, "%d", video_fmt);
+			OutputDebugString(ch);
+			if (video_fmt != AV_PIX_FMT_RGB24 && video_fmt != AV_PIX_FMT_RGB32 && video_fmt != AV_PIX_FMT_RGBA && video_fmt != AV_PIX_FMT_BGR0
+				&& video_fmt != AV_PIX_FMT_BGR24 && video_fmt != AV_PIX_FMT_BGR32 && video_fmt != AV_PIX_FMT_BGRA && video_fmt != AV_PIX_FMT_ARGB
+				&& video_fmt != AV_PIX_FMT_ABGR && video_fmt != AV_PIX_FMT_GBRP) {
+				pix_format = AV_PIX_FMT_YUYV422;
+				fp->yuy2 = true;
+			}
+		}
 		fp->sws_ctx = sws_getContext(
 			fp->video_codec_context->width, fp->video_codec_context->height
 			, fp->video_codec_context->pix_fmt
 			, fp->video_codec_context->width, fp->video_codec_context->height
-			, AV_PIX_FMT_BGR24, SWS_BICUBIC, NULL, NULL, NULL);
+			, pix_format, SWS_BICUBIC, NULL, NULL, NULL);
 
 		if (!fp->sws_ctx) {
 			OutputDebugString("Can not use sws");
