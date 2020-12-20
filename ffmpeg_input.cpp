@@ -661,8 +661,6 @@ INPUT_HANDLE func_open(LPSTR file)
 		AVPixelFormat pix_format = AV_PIX_FMT_BGR24;
 		if (is_output_yuy2) {
 			AVPixelFormat video_fmt = fp->video_codec_context->pix_fmt;
-			sprintf_s(ch, "%d", video_fmt);
-			OutputDebugString(ch);
 			if (video_fmt != AV_PIX_FMT_RGB24 && video_fmt != AV_PIX_FMT_RGB32 && video_fmt != AV_PIX_FMT_RGBA && video_fmt != AV_PIX_FMT_BGR0
 				&& video_fmt != AV_PIX_FMT_BGR24 && video_fmt != AV_PIX_FMT_BGR32 && video_fmt != AV_PIX_FMT_BGRA && video_fmt != AV_PIX_FMT_ARGB
 				&& video_fmt != AV_PIX_FMT_ABGR && video_fmt != AV_PIX_FMT_GBRP) {
