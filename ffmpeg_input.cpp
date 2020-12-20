@@ -393,7 +393,7 @@ int func_read_video( INPUT_HANDLE ih,int frame,void *buf )
 		int      dst_linesize[4] = { -(output_linesize), 0, 0, 0 };
 		output_size = sws_scale(fp->sws_ctx, (const uint8_t* const*)fp->frame->data, fp->frame->linesize, 0, fp->frame->height, dst_data, dst_linesize);
 
-		return fp->frame->width * fp->frame->height * 3;
+		return width * height * 3;
 	}
 }
 
