@@ -106,6 +106,7 @@ typedef struct FileHandle{
 uint8_t *swr_buf = 0;
 std::map<std::string, std::string> decoder_redirect{};
 bool is_output_yuy2 = false;
+int scaling_algorithm = SWS_BICUBIC;
 char ch[100];
 AVRational time_base = { 1, AV_TIME_BASE };
 
@@ -219,6 +220,45 @@ void reload_config() {
 	}
 	else {
 		is_output_yuy2 = false;
+	}
+	data = read_config("decoder", "scaling_algorithm", "BICUBIC");
+	scaling_algorithm = 0;
+	if (!strcmp(data, "FAST_BILINEAR")) {
+		scaling_algorithm = SWS_FAST_BILINEAR;
+	}
+	if (!strcmp(data, "BILINEAR")) {
+		scaling_algorithm = SWS_BILINEAR;
+	}
+	if (!strcmp(data, "BICUBIC")) {
+		scaling_algorithm = SWS_BICUBIC;
+	}
+	if (!strcmp(data, "X")) {
+		scaling_algorithm = SWS_X;
+	}
+	if (!strcmp(data, "POINT")) {
+		scaling_algorithm = SWS_POINT;
+	}
+	if (!strcmp(data, "AREA")) {
+		scaling_algorithm = SWS_AREA;
+	}
+	if (!strcmp(data, "BICUBLIN")) {
+		scaling_algorithm = SWS_BICUBLIN;
+	}
+	if (!strcmp(data, "GAUSS")) {
+		scaling_algorithm = SWS_GAUSS;
+	}
+	if (!strcmp(data, "SINC")) {
+		scaling_algorithm = SWS_SINC;
+	}
+	if (!strcmp(data, "LANCZOS")) {
+		scaling_algorithm = SWS_LANCZOS;
+	}
+	if (!strcmp(data, "SPLINE")) {
+		scaling_algorithm = SWS_SPLINE;
+	}
+	if(scaling_algorithm == 0) {
+		save_config("decoder", "scaling_algorithm", "BICUBIC");
+		scaling_algorithm = SWS_BICUBIC;
 	}
 }
 
@@ -553,6 +593,20 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		if (data == "true") {
 			CheckDlgButton(hWnd, IDC_CHECK1, BST_CHECKED);
 		}
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"FAST_BILINEAR");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"BILINEAR");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"BICUBIC");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"X");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"POINT");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"AREA");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"BICUBLIN");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"GAUSS");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"SINC");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"LANCZOS");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"SPLINE");
+		data = read_config("decoder", "scaling_algorithm", "BICUBIC");
+		ret = SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_FINDSTRINGEXACT, -1, (LPARAM)data.c_str());
+		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_SETCURSEL, ret, 0);
 		return TRUE;
 	case WM_COMMAND:
 		wmId = LOWORD(wParam);
@@ -568,6 +622,9 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			else {
 				save_config("decoder", "yuy2", "false");
 			}
+			GetDlgItemText(hWnd, IDC_COMBO1,
+				(LPTSTR)ch, (int)sizeof(ch));
+			save_config("decoder", "scaling_algorithm", ch);
 			reload_config();
 			EndDialog(hWnd, IDD_DIALOG1);
 			break;
@@ -672,7 +729,7 @@ INPUT_HANDLE func_open(LPSTR file)
 			fp->video_codec_context->width, fp->video_codec_context->height
 			, fp->video_codec_context->pix_fmt
 			, fp->video_codec_context->width, fp->video_codec_context->height
-			, pix_format, SWS_BICUBIC, NULL, NULL, NULL);
+			, pix_format, scaling_algorithm, NULL, NULL, NULL);
 
 		if (!fp->sws_ctx) {
 			OutputDebugString("Can not use sws");
