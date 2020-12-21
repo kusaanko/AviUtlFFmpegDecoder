@@ -59,6 +59,9 @@ FFmpegのdllには https://github.com/kusaanko/FFmpeg-Auto-Build が使用可能
 その他のFFmpegも使用可能です。  
 よくわからない方は https://github.com/kusaanko/FFmpeg-Auto-Build/releases からwin32_gpl_nx.x.x_shared_日付.zip を使用してください。  
 
+# 既知のバグ
+- ファイル->開くから動画ファイルを開いた場合、もしくはAviUtlのメインウィンドウに動画をドラッグ・アンド・ドロップして動画ファイルを読み込むんだ場合に正常に再生できません。拡張編集プラグインより読み込んでください。
+
 # ハードウェアデコーダーを使用する
 AviUtlのメニューバー>ファイル>環境設定>入力プラグインの設定>FFmpeg Decoder from Ropimerの設定をクリックします。  
 出てきたダイアログのテキストボックスに使用したいデコーダー名を入力します。  
