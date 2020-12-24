@@ -546,10 +546,12 @@ int func_read_audio(INPUT_HANDLE ih, int start, int length, void* buf)
 		if (decoded + len > length) {
 			len = length - decoded;
 		}
-		memcpy(((uint8_t*)buf) + (decoded * 4), swr_buf + (skip * 4), len * 4);
-		decoded += len;
+		if (len > 0) {
+			memcpy(((uint8_t*)buf) + (decoded * 4), swr_buf + (skip * 4), len * 4);
+			decoded += len;
+		}
 		fp->need_resample = false;
-		if (decoded >= length) {
+		if (decoded >= length || len <= 0) {
 			return decoded;
 		}
 		need_grab = skip + len >= fp->audio_frame->nb_samples;
