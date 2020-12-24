@@ -355,7 +355,7 @@ BOOL func_info_get( INPUT_HANDLE ih,INPUT_INFO *iip )
 
 	if( fp->audio ) {
 		iip->flag |= INPUT_INFO_FLAG_AUDIO;
-		iip->audio_n = (int)(((double)fp->format_context->duration) / 1000000 * fp->audio_codec_context->sample_rate);
+		iip->audio_n = (int)(fp->format_context->duration / (double)AV_TIME_BASE * fp->audio_codec_context->sample_rate);
 		iip->audio_format = fp->audio_format;
 		iip->audio_format_size = sizeof(WAVEFORMATEX) + fp->audio_format->cbSize;
 	}
