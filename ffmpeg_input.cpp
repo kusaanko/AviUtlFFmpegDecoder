@@ -105,7 +105,8 @@ typedef struct FileHandle{
 
 uint8_t *swr_buf = 0;
 std::map<std::string, std::string> decoder_redirect{};
-bool is_output_yuy2 = false;
+std::vector<FileHandle*> file_handles;
+bool is_output_yuy2 = true;
 int scaling_algorithm = SWS_BICUBIC;
 char ch[100];
 AVRational time_base = { 1, AV_TIME_BASE };
@@ -285,11 +286,17 @@ BOOL func_exit( void )
 
 void file_handle_free(FILE_HANDLE *fp) {
 	if (fp) {
+		auto it = std::find(file_handles.begin(), file_handles.end(), fp);
+
+		if (it != file_handles.end())
+			file_handles.erase(it);
 		avformat_close_input(&fp->format_context);
 		if (fp->swr) {
 			swr_free(&fp->swr);
 		}
-		if (fp->sws_ctx) sws_freeContext(fp->sws_ctx);
+		if (fp->sws_ctx) {
+			sws_freeContext(fp->sws_ctx);
+		}
 		if (fp->video) {
 			av_frame_unref(fp->frame);
 			av_frame_free(&fp->frame);
@@ -566,6 +573,23 @@ BOOL func_is_keyframe( INPUT_HANDLE ih,int frame )
 	}
 }
 
+void genSwsContext(FileHandle* fp) {
+	AVPixelFormat pix_format = AV_PIX_FMT_BGR24;
+	if (is_output_yuy2) {
+		AVPixelFormat video_fmt = fp->video_codec_context->pix_fmt;
+		if (video_fmt != AV_PIX_FMT_RGB24 && video_fmt != AV_PIX_FMT_RGB32 && video_fmt != AV_PIX_FMT_RGBA && video_fmt != AV_PIX_FMT_BGR0
+			&& video_fmt != AV_PIX_FMT_BGR24 && video_fmt != AV_PIX_FMT_BGR32 && video_fmt != AV_PIX_FMT_BGRA && video_fmt != AV_PIX_FMT_ARGB
+			&& video_fmt != AV_PIX_FMT_ABGR && video_fmt != AV_PIX_FMT_GBRP) {
+			pix_format = AV_PIX_FMT_YUYV422;
+			fp->yuy2 = true;
+		}
+	}
+	fp->sws_ctx = sws_getContext(
+		fp->video_codec_context->width, fp->video_codec_context->height
+		, fp->video_codec_context->pix_fmt
+		, fp->video_codec_context->width, fp->video_codec_context->height
+		, pix_format, scaling_algorithm, NULL, NULL, NULL);
+}
 
 //---------------------------------------------------------------------
 //		設定ダイアログ
@@ -592,6 +616,10 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		data = read_config("decoder", "yuy2", "true");
 		if (data == "true") {
 			CheckDlgButton(hWnd, IDC_CHECK1, BST_CHECKED);
+		}
+		data = read_config("decoder", "scaling_algorythm_apply_now", "true");
+		if (data == "true") {
+			CheckDlgButton(hWnd, IDC_CHECK2, BST_CHECKED);
 		}
 		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"FAST_BILINEAR");
 		SendDlgItemMessage(hWnd, IDC_COMBO1, (UINT)CB_ADDSTRING, 0, (LPARAM)"BILINEAR");
@@ -625,6 +653,17 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			GetDlgItemText(hWnd, IDC_COMBO1,
 				(LPTSTR)ch, (int)sizeof(ch));
 			save_config("decoder", "scaling_algorithm", ch);
+			if (IsDlgButtonChecked(hWnd, IDC_CHECK2)) {
+				save_config("decoder", "scaling_algorythm_apply_now", "true");
+				if (IsDlgButtonChecked(hWnd, IDC_CHECK1)) {
+					for (FileHandle* fp : file_handles) {
+						genSwsContext(fp);
+					}
+				}
+			}
+			else {
+				save_config("decoder", "scaling_algorythm_apply_now", "false");
+			}
 			reload_config();
 			EndDialog(hWnd, IDD_DIALOG1);
 			break;
@@ -639,9 +678,6 @@ BOOL func_config( HWND hwnd,HINSTANCE dll_hinst )
 
 	return TRUE;
 }
-
-
-
 
 //---------------------------------------------------------------------
 //		ファイルオープン
@@ -715,21 +751,7 @@ INPUT_HANDLE func_open(LPSTR file)
 			OutputDebugString("avcodec_open2 failed\n");
 			goto audio;
 		}
-		AVPixelFormat pix_format = AV_PIX_FMT_BGR24;
-		if (is_output_yuy2) {
-			AVPixelFormat video_fmt = fp->video_codec_context->pix_fmt;
-			if (video_fmt != AV_PIX_FMT_RGB24 && video_fmt != AV_PIX_FMT_RGB32 && video_fmt != AV_PIX_FMT_RGBA && video_fmt != AV_PIX_FMT_BGR0
-				&& video_fmt != AV_PIX_FMT_BGR24 && video_fmt != AV_PIX_FMT_BGR32 && video_fmt != AV_PIX_FMT_BGRA && video_fmt != AV_PIX_FMT_ARGB
-				&& video_fmt != AV_PIX_FMT_ABGR && video_fmt != AV_PIX_FMT_GBRP) {
-				pix_format = AV_PIX_FMT_YUYV422;
-				fp->yuy2 = true;
-			}
-		}
-		fp->sws_ctx = sws_getContext(
-			fp->video_codec_context->width, fp->video_codec_context->height
-			, fp->video_codec_context->pix_fmt
-			, fp->video_codec_context->width, fp->video_codec_context->height
-			, pix_format, scaling_algorithm, NULL, NULL, NULL);
+		genSwsContext(fp);
 
 		if (!fp->sws_ctx) {
 			OutputDebugString("Can not use sws");
@@ -788,6 +810,7 @@ audio_2:
 	if (fp->video) {
 		grab(fp);
 	}
+	file_handles.push_back(fp);
 	return fp;
 reset:
 	file_handle_free(fp);
