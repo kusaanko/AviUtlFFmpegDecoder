@@ -370,14 +370,19 @@ BOOL func_info_get( INPUT_HANDLE ih,INPUT_INFO *iip )
 
 bool grab(FILE_HANDLE* fp) {
 	av_packet_unref(fp->packet);
-	while (av_read_frame(fp->format_context, fp->packet) == 0) {
+	int ret;
+	while ((ret = av_read_frame(fp->format_context, fp->packet)) == 0) {
 		if (fp->packet->stream_index == fp->video_stream->index) {
-			if (avcodec_send_packet(fp->video_codec_context, fp->packet) != 0) {
+			ret = avcodec_send_packet(fp->video_codec_context, fp->packet);
+			if (ret == AVERROR(EAGAIN)) {
+				continue;
+			}
+			if (ret != 0) {
 				OutputDebugString("avcodec_send_packet failed\n");
 				av_packet_unref(fp->packet);
 				return false;
 			}
-			if (avcodec_receive_frame(fp->video_codec_context, fp->frame) == 0) {
+			if (avcodec_receive_frame(fp->video_codec_context, fp->frame) >= 0) {
 				fp->video_now_frame = (int64_t)(((fp->frame->pts - fp->video_stream->start_time) * av_q2d(fp->video_stream->time_base)) * av_q2d(fp->video_stream->avg_frame_rate) + 0.5);
 				return true;
 			}
