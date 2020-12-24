@@ -347,7 +347,7 @@ BOOL func_info_get( INPUT_HANDLE ih,INPUT_INFO *iip )
 		iip->flag |= INPUT_INFO_FLAG_VIDEO | INPUT_INFO_FLAG_VIDEO_RANDOM_ACCESS;
 		iip->rate = fp->video_stream->avg_frame_rate.num;
 		iip->scale = fp->video_stream->avg_frame_rate.den;
-		iip->n = (int)(fp->format_context->duration / (double)AV_TIME_BASE * (iip->rate / (double)iip->scale));
+		iip->n = (int)(fp->format_context->duration / (double)AV_TIME_BASE * av_q2d(fp->video_stream->avg_frame_rate));
 		iip->format = header;
 		iip->format_size = header->biSize;
 		iip->handler = 0;
