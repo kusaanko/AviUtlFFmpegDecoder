@@ -574,7 +574,7 @@ BOOL func_is_keyframe( INPUT_HANDLE ih,int frame )
 	}
 }
 
-void genSwsContext(FileHandle* fp) {
+void genSwsContext(FILE_HANDLE* fp) {
 	AVPixelFormat pix_format = AV_PIX_FMT_BGR24;
 	if (is_output_yuy2) {
 		AVPixelFormat video_fmt = fp->video_codec_context->pix_fmt;
