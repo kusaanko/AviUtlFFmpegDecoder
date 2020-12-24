@@ -388,7 +388,6 @@ bool grab(FILE_HANDLE* fp) {
 }
 
 void seek_only(FILE_HANDLE* fp, int frame) {
-	AVRational time_base = { 1, AV_TIME_BASE };
 	int64_t time_stamp = (int64_t)((int64_t)frame * 1000000 / ((double)fp->video_stream->avg_frame_rate.num / fp->video_stream->avg_frame_rate.den)) + fp->format_context->start_time;
 	avformat_seek_file(fp->format_context, -1, INT64_MIN, time_stamp, INT64_MAX, AVSEEK_FLAG_BACKWARD);
 	avcodec_flush_buffers(fp->video_codec_context);
