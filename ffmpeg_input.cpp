@@ -87,7 +87,8 @@ typedef struct FileHandle{
 	WAVEFORMATEX *audio_format;
 	AVFrame* frame;
 	AVFrame* audio_frame;
-	AVPacket *packet;
+	AVPacket packet;
+	AVPacket* audio_packet;
 	SwsContext* sws_ctx;
 	SwrContext* swr;
 	double fps;
@@ -301,14 +302,15 @@ void file_handle_free(FILE_HANDLE *fp) {
 			av_frame_unref(fp->frame);
 			av_frame_free(&fp->frame);
 			avcodec_free_context(&fp->video_codec_context);
+			av_packet_unref(&fp->packet);
 		}
 		if (fp->audio) {
 			av_frame_unref(fp->audio_frame);
 			av_frame_free(&fp->audio_frame);
 			avcodec_free_context(&fp->audio_codec_context);
 			GlobalFree(fp->audio_format);
+			av_packet_free(&fp->audio_packet);
 		}
-		av_packet_free(&fp->packet);
 		GlobalFree(fp);
 	}
 }
@@ -369,17 +371,21 @@ BOOL func_info_get( INPUT_HANDLE ih,INPUT_INFO *iip )
 //---------------------------------------------------------------------
 
 bool grab(FILE_HANDLE* fp) {
-	av_packet_unref(fp->packet);
 	int ret;
-	while ((ret = av_read_frame(fp->format_context, fp->packet)) == 0) {
-		if (fp->packet->stream_index == fp->video_stream->index) {
-			ret = avcodec_send_packet(fp->video_codec_context, fp->packet);
+	if (avcodec_receive_frame(fp->video_codec_context, fp->frame) >= 0) {
+		fp->video_now_frame = (int64_t)(((fp->frame->pts - fp->video_stream->start_time) * av_q2d(fp->video_stream->time_base)) * av_q2d(fp->video_stream->avg_frame_rate) + 0.5);
+		return true;
+	}
+	av_packet_unref(&fp->packet);
+	while ((ret = av_read_frame(fp->format_context, &fp->packet)) == 0) {
+		if (fp->packet.stream_index == fp->video_stream->index) {
+			ret = avcodec_send_packet(fp->video_codec_context, &fp->packet);
 			if (ret == AVERROR(EAGAIN)) {
 				continue;
 			}
-			if (ret != 0) {
+			if (ret < 0) {
 				OutputDebugString("avcodec_send_packet failed\n");
-				av_packet_unref(fp->packet);
+				av_packet_unref(&fp->packet);
 				return false;
 			}
 			if (avcodec_receive_frame(fp->video_codec_context, fp->frame) >= 0) {
@@ -387,7 +393,18 @@ bool grab(FILE_HANDLE* fp) {
 				return true;
 			}
 		}
-		av_packet_unref(fp->packet);
+		av_packet_unref(&fp->packet);
+	}
+	//もう一度avcodec_send_packetするとフレームが出てくることがある
+	ret = avcodec_send_packet(fp->video_codec_context, NULL);
+	if (ret < 0) {
+		OutputDebugString("avcodec_send_packet failed\n");
+		av_packet_unref(&fp->packet);
+		return false;
+	}
+	if (avcodec_receive_frame(fp->video_codec_context, fp->frame) >= 0) {
+		fp->video_now_frame = (int64_t)(((fp->frame->pts - fp->video_stream->start_time) * av_q2d(fp->video_stream->time_base)) * av_q2d(fp->video_stream->avg_frame_rate) + 0.5);
+		return true;
 	}
 	return false;
 }
@@ -468,14 +485,14 @@ bool grab_audio(FILE_HANDLE* fp) {
 		fp->audio_next_timestamp = fp->audio_now_timestamp + fp->audio_frame->nb_samples;
 		fp->need_resample = true;
 		//メモリ解放
-		av_packet_unref(fp->packet);
+		av_packet_unref(fp->audio_packet);
 		return true;
 	}
-	while (av_read_frame(fp->format_context, fp->packet) == 0) {
-		if (fp->packet->stream_index == fp->audio_stream->index) {
-			if (avcodec_send_packet(fp->audio_codec_context, fp->packet) != 0) {
+	while (av_read_frame(fp->format_context, fp->audio_packet) == 0) {
+		if (fp->audio_packet->stream_index == fp->audio_stream->index) {
+			if (avcodec_send_packet(fp->audio_codec_context, fp->audio_packet) != 0) {
 				printf("avcodec_send_packet failed");
-				av_packet_unref(fp->packet);
+				av_packet_unref(fp->audio_packet);
 				return false;
 			}
 			if (avcodec_receive_frame(fp->audio_codec_context, fp->audio_frame) == 0) {
@@ -489,11 +506,30 @@ bool grab_audio(FILE_HANDLE* fp) {
 				}
 				fp->audio_next_timestamp = fp->audio_now_timestamp + fp->audio_frame->nb_samples;
 				fp->need_resample = true;
-				av_packet_unref(fp->packet);
+				av_packet_unref(fp->audio_packet);
 				return true;
 			}
 		}
-		av_packet_unref(fp->packet);
+		av_packet_unref(fp->audio_packet);
+	}
+	if (avcodec_send_packet(fp->audio_codec_context, fp->audio_packet) != 0) {
+		printf("avcodec_send_packet failed");
+		av_packet_unref(fp->audio_packet);
+		return false;
+	}
+	if (avcodec_receive_frame(fp->audio_codec_context, fp->audio_frame) == 0) {
+		if (fp->audio_seek) {
+			fp->audio_now_timestamp = (int64_t)(((fp->audio_frame->pts) * av_q2d(fp->audio_stream->time_base) - (fp->format_context->start_time * av_q2d(time_base))) * fp->audio_codec_context->sample_rate);
+			fp->audio_seek = false;
+			fp->audio_now_timestamp -= fp->audio_now_timestamp % fp->audio_frame->nb_samples;
+		}
+		else {
+			fp->audio_now_timestamp = fp->audio_next_timestamp;
+		}
+		fp->audio_next_timestamp = fp->audio_now_timestamp + fp->audio_frame->nb_samples;
+		fp->need_resample = true;
+		av_packet_unref(fp->audio_packet);
+		return true;
 	}
 	return false;
 }
@@ -747,7 +783,6 @@ INPUT_HANDLE func_open(LPSTR file)
 			OutputDebugString("avcodec_alloc_context3 failed\n");
 			goto audio;
 		}
-		fp->video_codec_context->thread_count = 0;
 		if (avcodec_parameters_to_context(fp->video_codec_context, fp->video_stream->codecpar) < 0) {
 			OutputDebugString("avcodec_parameters_to_context failed\n");
 			goto audio;
@@ -757,6 +792,8 @@ INPUT_HANDLE func_open(LPSTR file)
 			OutputDebugString("avcodec_open2 failed\n");
 			goto audio;
 		}
+		//スレッド数の設定はavcodec_open2後出ないと全フレームデコードできない
+		fp->video_codec_context->thread_count = 0;
 		genSwsContext(fp);
 
 		if (!fp->sws_ctx) {
@@ -765,6 +802,10 @@ INPUT_HANDLE func_open(LPSTR file)
 		}
 		fp->fps = fp->video_stream->r_frame_rate.num / fp->video_stream->r_frame_rate.den;
 		fp->frame = av_frame_alloc();
+		//fp->packet = av_packet_alloc();
+		av_init_packet(&fp->packet);
+		fp->packet.data = NULL;
+		fp->packet.size = 0;
 	}
 	goto audio_2;
 audio:
@@ -788,7 +829,6 @@ audio_2:
 			OutputDebugString("avcodec_alloc_context3 failed\n");
 			goto reset;
 		}
-		fp->audio_codec_context->thread_count = 0;
 		if (avcodec_parameters_to_context(fp->audio_codec_context, fp->audio_stream->codecpar) < 0) {
 			OutputDebugString("avcodec_parameters_to_context failed\n");
 			goto reset;
@@ -798,6 +838,8 @@ audio_2:
 			OutputDebugString("avcodec_open2 failed\n");
 			goto reset;
 		}
+		//スレッド数の設定はavcodec_open2後出ないと全フレームデコードできない
+		fp->audio_codec_context->thread_count = 0;
 		fp->audio_format = new WAVEFORMATEX();
 		fp->audio_format->wFormatTag = WAVE_FORMAT_PCM;
 		fp->audio_format->nChannels = 2;
@@ -807,12 +849,14 @@ audio_2:
 		fp->audio_format->nAvgBytesPerSec = fp->audio_format->nSamplesPerSec * fp->audio_format->nBlockAlign;
 		fp->audio_format->cbSize = 0;
 		fp->audio_frame = av_frame_alloc();
+		fp->audio_packet = av_packet_alloc();
+		av_init_packet(fp->audio_packet);
+		fp->audio_packet->data = NULL;
+		fp->audio_packet->size = 0;
 	}
 	if (!fp->video && !fp->audio) {
 		goto reset;
 	}
-	fp->packet = av_packet_alloc();
-	av_init_packet(fp->packet);
 	if (fp->video) {
 		grab(fp);
 	}
