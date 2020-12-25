@@ -792,7 +792,7 @@ INPUT_HANDLE func_open(LPSTR file)
 			OutputDebugString("avcodec_open2 failed\n");
 			goto audio;
 		}
-		//スレッド数の設定はavcodec_open2後出ないと全フレームデコードできない
+		//スレッド数の設定はavcodec_open2後でないと全フレームデコードできない
 		fp->video_codec_context->thread_count = 0;
 		genSwsContext(fp);
 
@@ -838,7 +838,7 @@ audio_2:
 			OutputDebugString("avcodec_open2 failed\n");
 			goto reset;
 		}
-		//スレッド数の設定はavcodec_open2後出ないと全フレームデコードできない
+		//スレッド数の設定はavcodec_open2後でないと全フレームデコードできない
 		fp->audio_codec_context->thread_count = 0;
 		fp->audio_format = new WAVEFORMATEX();
 		fp->audio_format->wFormatTag = WAVE_FORMAT_PCM;
