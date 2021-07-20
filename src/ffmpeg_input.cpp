@@ -19,6 +19,7 @@ extern "C" {
 #pragma comment(lib, "avutil.lib")
 #pragma comment(lib, "avformat.lib")
 #pragma comment(lib, "swscale.lib")
+#pragma comment(lib, "swresample.lib")
 
 #include "input.h"
 #pragma comment(lib, "user32.lib")
@@ -35,37 +36,37 @@ extern "C" {
 #define VIDEO_EXT "*.avi;*.mov;*.wmv;*.mp4;*.webm;*.mkv;*.flv;*.264;*.mpeg;*.ts;*.mts;*.m2ts;"
 #define AUDIO_EXT "*.mp3;*.ogg;*.wav;*.aac;*.wma;*.m4a;*.webm;*.opus;"
 #define VERSION "0.6"
-#define BUILD_NUM "51"
+#define BUILD_NUM "52"
 
 
 //---------------------------------------------------------------------
 //        入力プラグイン構造体定義
 //---------------------------------------------------------------------
 INPUT_PLUGIN_TABLE input_plugin_table = {
-    INPUT_PLUGIN_FLAG_VIDEO|INPUT_PLUGIN_FLAG_AUDIO,    //    フラグ
-                                                        //    INPUT_PLUGIN_FLAG_VIDEO    : 画像をサポートする
-                                                        //    INPUT_PLUGIN_FLAG_AUDIO    : 音声をサポートする
-    "FFmpeg Decoder from Ropimer",                      //    プラグインの名前
-    "Video File (" VIDEO_EXT ")\0" VIDEO_EXT "\0"       //    入力ファイルフィルタ
-    "Audio File (" AUDIO_EXT ")\0" AUDIO_EXT "\0"       //    入力ファイルフィルタ
-    "Any File (*.*)\0*.*\0",                            //    入力ファイルフィルタ
-    "FFmpeg Decoder from Ropimer v" VERSION " Build " BUILD_NUM " by Kusaanko",        //    プラグインの情報
-    func_init,                                          //    DLL開始時に呼ばれる関数へのポインタ (NULLなら呼ばれません)
-    func_exit,                                          //    DLL終了時に呼ばれる関数へのポインタ (NULLなら呼ばれません)
-    func_open,                                          //    入力ファイルをオープンする関数へのポインタ
-    func_close,                                         //    入力ファイルをクローズする関数へのポインタ
-    func_info_get,                                      //    入力ファイルの情報を取得する関数へのポインタ
-    func_read_video,                                    //    画像データを読み込む関数へのポインタ
-    func_read_audio,                                    //    音声データを読み込む関数へのポインタ
-    func_is_keyframe,                                   //    キーフレームか調べる関数へのポインタ (NULLなら全てキーフレーム)
-    func_config,                                        //    入力設定のダイアログを要求された時に呼ばれる関数へのポインタ (NULLなら呼ばれません)
+    INPUT_PLUGIN_FLAG_VIDEO | INPUT_PLUGIN_FLAG_AUDIO,         //    フラグ
+                                                               //    INPUT_PLUGIN_FLAG_VIDEO    : 画像をサポートする
+                                                               //    INPUT_PLUGIN_FLAG_AUDIO    : 音声をサポートする
+    (char*)"FFmpeg Decoder from Ropimer",                      //    プラグインの名前
+    (char*)("Video File (" VIDEO_EXT ")\0" VIDEO_EXT "\0"      //    入力ファイルフィルタ
+    "Audio File (" AUDIO_EXT ")\0" AUDIO_EXT "\0"              //    入力ファイルフィルタ
+    "Any File (*.*)\0*.*\0"),                                  //    入力ファイルフィルタ
+    (char*)("FFmpeg Decoder from Ropimer v" VERSION " Build " BUILD_NUM " by Kusaanko"),        //    プラグインの情報
+    func_init,                                                 //    DLL開始時に呼ばれる関数へのポインタ (NULLなら呼ばれません)
+    func_exit,                                                 //    DLL終了時に呼ばれる関数へのポインタ (NULLなら呼ばれません)
+    func_open,                                                 //    入力ファイルをオープンする関数へのポインタ
+    func_close,                                                //    入力ファイルをクローズする関数へのポインタ
+    func_info_get,                                             //    入力ファイルの情報を取得する関数へのポインタ
+    func_read_video,                                           //    画像データを読み込む関数へのポインタ
+    func_read_audio,                                           //    音声データを読み込む関数へのポインタ
+    func_is_keyframe,                                          //    キーフレームか調べる関数へのポインタ (NULLなら全てキーフレーム)
+    func_config,                                               //    入力設定のダイアログを要求された時に呼ばれる関数へのポインタ (NULLなら呼ばれません)
 };
 
 
 //---------------------------------------------------------------------
 //        入力プラグイン構造体のポインタを渡す関数
 //---------------------------------------------------------------------
-EXTERN_C INPUT_PLUGIN_TABLE __declspec(dllexport) * __stdcall GetInputPluginTable( void )
+EXTERN_C INPUT_PLUGIN_TABLE __declspec(dllexport)* __stdcall GetInputPluginTable(void)
 {
     return &input_plugin_table;
 }
@@ -74,7 +75,7 @@ EXTERN_C INPUT_PLUGIN_TABLE __declspec(dllexport) * __stdcall GetInputPluginTabl
 //---------------------------------------------------------------------
 //        ファイルハンドル構造体
 //---------------------------------------------------------------------
-typedef struct FileHandle{
+typedef struct FileHandle {
     bool video = false;
     bool audio = false;
     AVFormatContext* format_context;
@@ -84,7 +85,7 @@ typedef struct FileHandle{
     AVStream* audio_stream;
     AVCodec* audio_codec;
     AVCodecContext* audio_codec_context;
-    WAVEFORMATEX *audio_format;
+    WAVEFORMATEX* audio_format;
     AVFrame* frame;
     AVFrame* audio_frame;
     AVPacket packet;
@@ -93,7 +94,7 @@ typedef struct FileHandle{
     SwrContext* swr;
     double fps;
     int swr_buf_len = 0;
-    uint8_t *swr_buf;
+    uint8_t* swr_buf;
     int64_t audio_now_timestamp;
     int64_t audio_next_timestamp;
     int64_t video_now_frame;
@@ -104,7 +105,7 @@ typedef struct FileHandle{
     bool yuy2 = false;
 } FILE_HANDLE;
 
-uint8_t *swr_buf = 0;
+uint8_t* swr_buf = 0;
 std::map<std::string, std::string> decoder_redirect{};
 std::vector<FileHandle*> file_handles;
 bool is_output_yuy2 = true;
@@ -124,7 +125,7 @@ std::vector<std::string> split_str(std::string str, std::string delim) {
     return vec;
 }
 
-char *get_exe_dir() {
+char* get_exe_dir() {
     char Path[MAX_PATH + 1];
     if (0 != GetModuleFileName(NULL, Path, MAX_PATH)) {
 
@@ -133,31 +134,31 @@ char *get_exe_dir() {
             , fname[MAX_PATH + 1]
             , ext[MAX_PATH + 1];
 
-        _splitpath_s(Path, drive, dir, fname, ext);
+        char ret[2000];
 
-        return dir;
+        _splitpath_s(Path, drive, dir, fname, ext);
+        sprintf_s(ret, sizeof(ret), "%s%s", drive, dir);
+        return ret;
     }
-    return ".";
+    return (char*)".";
 }
 
-const char* read_config(char* section, char* key, char* default_str) {
+std::string read_config(const char* section, const char* key, const char* default_str) {
     char ret[256];
     char file_path[600];
-    sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
+    sprintf_s(file_path, sizeof(file_path), "%s\\ffmpeg_decoder.ini", get_exe_dir());
     GetPrivateProfileString(section, key, default_str, ret, sizeof(ret), file_path);
     std::string ret_str = std::regex_replace(ret, std::regex("\\\\n"), "\n");
     ret_str = std::regex_replace(ret_str, std::regex("\n"), "\r\n");
-    return ret_str.c_str();
+    return ret_str;
 }
 
-char* save_config(char* section, char* key, const char* value) {
-    char ret[256];
+void save_config(const char* section, const char* key, const char* value) {
     char file_path[600];
     std::string data = std::regex_replace(value, std::regex("\r"), "");
     data = std::regex_replace(data, std::regex("\n"), "\\n");
     sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
     WritePrivateProfileString(section, key, data.c_str(), file_path);
-    return ret;
 }
 
 //古いタイプのコンフィグファイルを新しいタイプに移行
@@ -167,7 +168,7 @@ void migrate_config() {
     char ch[3000] = "";
     FILE* file;
     char file_path[300];
-    sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
+    sprintf_s(file_path, "%s\\AviUtlFFmpegPlugin.ini", get_exe_dir());
     ret = fopen_s(&file, file_path, "r");
     if (ret == 0 && file) {
         bool is_old_config = true;
@@ -216,14 +217,14 @@ void reload_config() {
         }
     }
 
-    const char *data = read_config("decoder", "yuy2", "true");
+    const char* data = read_config("decoder", "yuy2", "true").c_str();
     if (!strcmp(data, "true")) {
         is_output_yuy2 = true;
     }
     else {
         is_output_yuy2 = false;
     }
-    data = read_config("decoder", "scaling_algorithm", "BICUBIC");
+    data = read_config("decoder", "scaling_algorithm", "BICUBIC").c_str();
     scaling_algorithm = 0;
     if (!strcmp(data, "FAST_BILINEAR")) {
         scaling_algorithm = SWS_FAST_BILINEAR;
@@ -258,7 +259,7 @@ void reload_config() {
     if (!strcmp(data, "SPLINE")) {
         scaling_algorithm = SWS_SPLINE;
     }
-    if(scaling_algorithm == 0) {
+    if (scaling_algorithm == 0) {
         save_config("decoder", "scaling_algorithm", "BICUBIC");
         scaling_algorithm = SWS_BICUBIC;
     }
@@ -267,7 +268,7 @@ void reload_config() {
 //---------------------------------------------------------------------
 //        初期化
 //---------------------------------------------------------------------
-BOOL func_init( void )
+BOOL func_init(void)
 {
     swr_buf = (uint8_t*)malloc(2048 * 4);
     migrate_config();
@@ -279,13 +280,13 @@ BOOL func_init( void )
 //---------------------------------------------------------------------
 //        終了
 //---------------------------------------------------------------------
-BOOL func_exit( void )
+BOOL func_exit(void)
 {
     free(swr_buf);
     return TRUE;
 }
 
-void file_handle_free(FILE_HANDLE *fp) {
+void file_handle_free(FILE_HANDLE* fp) {
     if (fp) {
         auto it = std::find(file_handles.begin(), file_handles.end(), fp);
 
@@ -308,7 +309,7 @@ void file_handle_free(FILE_HANDLE *fp) {
             av_frame_unref(fp->audio_frame);
             av_frame_free(&fp->audio_frame);
             avcodec_free_context(&fp->audio_codec_context);
-            GlobalFree(fp->audio_format);
+            free(fp->audio_format);
             av_packet_free(&fp->audio_packet);
         }
         GlobalFree(fp);
@@ -318,9 +319,9 @@ void file_handle_free(FILE_HANDLE *fp) {
 //---------------------------------------------------------------------
 //        ファイルクローズ
 //---------------------------------------------------------------------
-BOOL func_close( INPUT_HANDLE ih )
+BOOL func_close(INPUT_HANDLE ih)
 {
-    FILE_HANDLE    *fp = (FILE_HANDLE *)ih;
+    FILE_HANDLE* fp = (FILE_HANDLE*)ih;
 
     file_handle_free(fp);
 
@@ -331,15 +332,15 @@ BOOL func_close( INPUT_HANDLE ih )
 //---------------------------------------------------------------------
 //        ファイルの情報
 //---------------------------------------------------------------------
-BOOL func_info_get( INPUT_HANDLE ih,INPUT_INFO *iip )
+BOOL func_info_get(INPUT_HANDLE ih, INPUT_INFO* iip)
 {
-    FILE_HANDLE    *fp = (FILE_HANDLE *)ih;
+    FILE_HANDLE* fp = (FILE_HANDLE*)ih;
 
     iip->flag = 0;
     memset(iip, 0, sizeof(INPUT_INFO));
 
-    if( fp->video ) {
-        BITMAPINFOHEADER *header = new BITMAPINFOHEADER();
+    if (fp->video) {
+        BITMAPINFOHEADER* header = new BITMAPINFOHEADER();
         header->biWidth = fp->video_codec_context->width;
         header->biHeight = fp->video_codec_context->height;
         header->biBitCount = 24;
@@ -355,7 +356,7 @@ BOOL func_info_get( INPUT_HANDLE ih,INPUT_INFO *iip )
         iip->handler = 0;
     }
 
-    if( fp->audio ) {
+    if (fp->audio) {
         iip->flag |= INPUT_INFO_FLAG_AUDIO;
         iip->audio_n = (int)(fp->format_context->duration / (double)AV_TIME_BASE * fp->audio_codec_context->sample_rate);
         iip->audio_format = fp->audio_format;
@@ -429,7 +430,7 @@ void seek(FILE_HANDLE* fp, int frame) {
     while (fp->video_now_frame < frame && grab(fp)) {}
 }
 
-int func_read_video( INPUT_HANDLE ih,int frame,void *buf )
+int func_read_video(INPUT_HANDLE ih, int frame, void* buf)
 {
     FILE_HANDLE* fp = (FILE_HANDLE*)ih;
     if (!fp->video_stream) return 0;
@@ -535,7 +536,7 @@ bool grab_audio(FILE_HANDLE* fp) {
 }
 
 void seek_audio(FILE_HANDLE* fp, int64_t sample_pos) {
-    AVRational tb = {1, fp->audio_codec_context->sample_rate};
+    AVRational tb = { 1, fp->audio_codec_context->sample_rate };
     int64_t timestamp = sample_pos * (int64_t)1000000 / fp->audio_codec_context->sample_rate + fp->format_context->start_time;
     avformat_seek_file(fp->format_context, -1, INT64_MIN, timestamp, INT64_MAX, AVSEEK_FLAG_BACKWARD);
     avcodec_flush_buffers(fp->audio_codec_context);
@@ -579,7 +580,7 @@ int func_read_audio(INPUT_HANDLE ih, int start, int length, void* buf)
             return 0;
         }
         int skip = 0;
-        if ((int) fp->audio_now_timestamp < start) {
+        if ((int)fp->audio_now_timestamp < start) {
             skip = start - (int)fp->audio_now_timestamp;
         }
         int len = fp->samples_return - skip;
@@ -603,14 +604,14 @@ int func_read_audio(INPUT_HANDLE ih, int start, int length, void* buf)
 //---------------------------------------------------------------------
 //        キーフレーム情報
 //---------------------------------------------------------------------
-BOOL func_is_keyframe( INPUT_HANDLE ih,int frame )
+BOOL func_is_keyframe(INPUT_HANDLE ih, int frame)
 {
-    FILE_HANDLE    *fp = (FILE_HANDLE *)ih;
+    FILE_HANDLE* fp = (FILE_HANDLE*)ih;
 
     if (fp->video) {
         return fp->frame->key_frame;
     }
-    if(fp->audio) {
+    if (fp->audio) {
         return fp->audio_frame->key_frame;
     }
 }
@@ -686,7 +687,7 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             GetDlgItemText(hWnd, IDC_EDIT1,
                 (LPTSTR)ch, (int)sizeof(ch));
             save_config("decoder", "replace", ch);
-            if(IsDlgButtonChecked(hWnd, IDC_CHECK1)) {
+            if (IsDlgButtonChecked(hWnd, IDC_CHECK1)) {
                 save_config("decoder", "yuy2", "true");
             }
             else {
@@ -714,7 +715,7 @@ BOOL CALLBACK DialogProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     }
     return FALSE;
 }
-BOOL func_config( HWND hwnd,HINSTANCE dll_hinst )
+BOOL func_config(HWND hwnd, HINSTANCE dll_hinst)
 {
     DialogBox(dll_hinst, MAKEINTRESOURCE(IDD_DIALOG1), NULL, DialogProc);
 
