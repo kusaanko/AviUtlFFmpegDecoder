@@ -80,15 +80,15 @@ typedef struct FileHandle {
     bool audio = false;
     AVFormatContext* format_context;
     AVStream* video_stream;
-    AVCodec* video_codec;
+    const AVCodec* video_codec;
     AVCodecContext* video_codec_context;
     AVStream* audio_stream;
-    AVCodec* audio_codec;
+    const AVCodec* audio_codec;
     AVCodecContext* audio_codec_context;
     WAVEFORMATEX* audio_format;
     AVFrame* frame;
     AVFrame* audio_frame;
-    AVPacket packet;
+    AVPacket* packet;
     AVPacket* audio_packet;
     SwsContext* sws_ctx;
     SwrContext* swr;
@@ -303,7 +303,7 @@ void file_handle_free(FILE_HANDLE* fp) {
             av_frame_unref(fp->frame);
             av_frame_free(&fp->frame);
             avcodec_free_context(&fp->video_codec_context);
-            av_packet_unref(&fp->packet);
+            av_packet_unref(fp->packet);
         }
         if (fp->audio) {
             av_frame_unref(fp->audio_frame);
@@ -377,16 +377,16 @@ bool grab(FILE_HANDLE* fp) {
         fp->video_now_frame = (int64_t)(((fp->frame->pts - fp->video_stream->start_time) * av_q2d(fp->video_stream->time_base)) * av_q2d(fp->video_stream->avg_frame_rate) + 0.5);
         return true;
     }
-    av_packet_unref(&fp->packet);
-    while ((ret = av_read_frame(fp->format_context, &fp->packet)) == 0) {
-        if (fp->packet.stream_index == fp->video_stream->index) {
-            ret = avcodec_send_packet(fp->video_codec_context, &fp->packet);
+    av_packet_unref(fp->packet);
+    while ((ret = av_read_frame(fp->format_context, fp->packet)) == 0) {
+        if (fp->packet->stream_index == fp->video_stream->index) {
+            ret = avcodec_send_packet(fp->video_codec_context, fp->packet);
             if (ret == AVERROR(EAGAIN)) {
                 continue;
             }
             if (ret < 0) {
                 OutputDebugString("avcodec_send_packet failed\n");
-                av_packet_unref(&fp->packet);
+                av_packet_unref(fp->packet);
                 return false;
             }
             if (avcodec_receive_frame(fp->video_codec_context, fp->frame) >= 0) {
@@ -394,13 +394,13 @@ bool grab(FILE_HANDLE* fp) {
                 return true;
             }
         }
-        av_packet_unref(&fp->packet);
+        av_packet_unref(fp->packet);
     }
     //もう一度avcodec_send_packetするとフレームが出てくることがある
     ret = avcodec_send_packet(fp->video_codec_context, NULL);
     if (ret < 0) {
         OutputDebugString("avcodec_send_packet failed\n");
-        av_packet_unref(&fp->packet);
+        av_packet_unref(fp->packet);
         return false;
     }
     if (avcodec_receive_frame(fp->video_codec_context, fp->frame) >= 0) {
@@ -803,10 +803,9 @@ INPUT_HANDLE func_open(LPSTR file)
         }
         fp->fps = fp->video_stream->r_frame_rate.num / fp->video_stream->r_frame_rate.den;
         fp->frame = av_frame_alloc();
-        //fp->packet = av_packet_alloc();
-        av_init_packet(&fp->packet);
-        fp->packet.data = NULL;
-        fp->packet.size = 0;
+        fp->packet = av_packet_alloc();
+        fp->packet->data = NULL;
+        fp->packet->size = 0;
     }
     goto audio_2;
 audio:
@@ -851,7 +850,6 @@ audio_2:
         fp->audio_format->cbSize = 0;
         fp->audio_frame = av_frame_alloc();
         fp->audio_packet = av_packet_alloc();
-        av_init_packet(fp->audio_packet);
         fp->audio_packet->data = NULL;
         fp->audio_packet->size = 0;
     }
