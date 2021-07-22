@@ -35,8 +35,8 @@ extern "C" {
 
 #define VIDEO_EXT "*.avi;*.mov;*.wmv;*.mp4;*.webm;*.mkv;*.flv;*.264;*.mpeg;*.ts;*.mts;*.m2ts;"
 #define AUDIO_EXT "*.mp3;*.ogg;*.wav;*.aac;*.wma;*.m4a;*.webm;*.opus;"
-#define VERSION "0.6"
-#define BUILD_NUM "52"
+#define VERSION "0.7"
+#define BUILD_NUM "53"
 
 
 //---------------------------------------------------------------------
