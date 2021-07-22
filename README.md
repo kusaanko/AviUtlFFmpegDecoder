@@ -35,9 +35,12 @@
 # インストール方法
 1. https://github.com/kusaanko/AviUtlFFmpegDecoder/releases よりauiファイルをダウンロードします
 1. ダウンロードしたauiファイルをaviutl.exeと同じディレクトリかPluginsフォルダに配置します
-1. お好きなFFmpegの32bit Sharedファイルをダウンロードします
+1. お好きなFFmpeg **(バージョン4.4)** の32bit Sharedファイルをダウンロードします
 1. FFmpegのdllファイルをaviutl.exeと同じディレクトリに配置します
 1. AviUtlの入力プラグイン優先順位よりFFmpeg Decoderを他の動画・音声入力プラグインより上、他のプラグインより下に移動します。
+
+FFmpegは**4.4**を使用してください。  
+4.4より古いバージョンを利用する場合はFFmpeg Decoder 0.6以下を使用してください。
 
 ファイル構造  
 aviutl  
@@ -48,16 +51,14 @@ aviutl
 ├avdevice-58.dll  
 ├avfilter-7.dll  
 ├avformat-58.dll  
-├avresample-4.dll  
 ├avutil-56.dll  
 ├postproc-55.dll  
 ├swresample-3.dll  
 └swscale-5.dll  
-※FFmpegのバージョンによりdllファイルの数・ファイル名が異なる可能性があります。  
 
 FFmpegのdllには https://github.com/kusaanko/FFmpeg-Auto-Build が使用可能です。  
 その他のFFmpegも使用可能です。  
-よくわからない方は https://github.com/kusaanko/FFmpeg-Auto-Build/releases からwin32_gpl_nx.x.x_shared_日付.zip を使用してください。  
+よくわからない方は https://github.com/kusaanko/FFmpeg-Auto-Build/releases からwin32_gpl_n4.4.x_shared_日付.zip を使用してください。  
 
 # 既知のバグ
 - ファイル->開くから動画ファイルを開いた場合、もしくはAviUtlのメインウィンドウに動画をドラッグ・アンド・ドロップして動画ファイルを読み込むんだ場合に正常に再生できません。拡張編集プラグインより読み込んでください。
