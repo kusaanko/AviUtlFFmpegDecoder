@@ -31,6 +31,7 @@
 #include <stdint.h>
 
 #include "attributes.h"
+#include "error.h"
 #include "avutil.h"
 #include "version.h"
 
@@ -671,7 +672,16 @@ void *av_dynarray2_add(void **tab_ptr, int *nb_ptr, size_t elem_size,
  * @param[out] r   Pointer to the result of the operation
  * @return 0 on success, AVERROR(EINVAL) on overflow
  */
-int av_size_mult(size_t a, size_t b, size_t *r);
+static inline int av_size_mult(size_t a, size_t b, size_t *r)
+{
+    size_t t = a * b;
+    /* Hack inspired from glibc: don't try the division if nelem and elsize
+     * are both less than sqrt(SIZE_MAX). */
+    if ((a | b) >= ((size_t)1 << (sizeof(size_t) * 4)) && a && t / a != b)
+        return AVERROR(EINVAL);
+    *r = t;
+    return 0;
+}
 
 /**
  * Set the maximum size that may be allocated in one block.
