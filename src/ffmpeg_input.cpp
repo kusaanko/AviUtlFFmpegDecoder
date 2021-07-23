@@ -804,8 +804,6 @@ INPUT_HANDLE func_open(LPSTR file)
         fp->fps = fp->video_stream->r_frame_rate.num / fp->video_stream->r_frame_rate.den;
         fp->frame = av_frame_alloc();
         fp->packet = av_packet_alloc();
-        fp->packet->data = NULL;
-        fp->packet->size = 0;
     }
     goto audio_2;
 audio:
@@ -850,8 +848,6 @@ audio_2:
         fp->audio_format->cbSize = 0;
         fp->audio_frame = av_frame_alloc();
         fp->audio_packet = av_packet_alloc();
-        fp->audio_packet->data = NULL;
-        fp->audio_packet->size = 0;
     }
     if (!fp->video && !fp->audio) {
         goto reset;
