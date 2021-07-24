@@ -125,7 +125,7 @@ std::vector<std::string> split_str(std::string str, std::string delim) {
     return vec;
 }
 
-char* get_exe_dir() {
+std::string get_exe_dir() {
     char Path[MAX_PATH + 1];
     if (0 != GetModuleFileName(NULL, Path, MAX_PATH)) {
 
@@ -146,7 +146,7 @@ char* get_exe_dir() {
 std::string read_config(const char* section, const char* key, const char* default_str) {
     char ret[256];
     char file_path[600];
-    sprintf_s(file_path, sizeof(file_path), "%s\\ffmpeg_decoder.ini", get_exe_dir());
+    sprintf_s(file_path, sizeof(file_path), "%s\\ffmpeg_decoder.ini", get_exe_dir().c_str());
     GetPrivateProfileString(section, key, default_str, ret, sizeof(ret), file_path);
     std::string ret_str = std::regex_replace(ret, std::regex("\\\\n"), "\n");
     ret_str = std::regex_replace(ret_str, std::regex("\n"), "\r\n");
@@ -157,7 +157,7 @@ void save_config(const char* section, const char* key, const char* value) {
     char file_path[600];
     std::string data = std::regex_replace(value, std::regex("\r"), "");
     data = std::regex_replace(data, std::regex("\n"), "\\n");
-    sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir());
+    sprintf_s(file_path, "%s\\ffmpeg_decoder.ini", get_exe_dir().c_str());
     WritePrivateProfileString(section, key, data.c_str(), file_path);
 }
 
@@ -168,7 +168,7 @@ void migrate_config() {
     char ch[3000] = "";
     FILE* file;
     char file_path[300];
-    sprintf_s(file_path, "%s\\AviUtlFFmpegPlugin.ini", get_exe_dir());
+    sprintf_s(file_path, "%s\\AviUtlFFmpegPlugin.ini", get_exe_dir().c_str());
     ret = fopen_s(&file, file_path, "r");
     if (ret == 0 && file) {
         bool is_old_config = true;
@@ -412,7 +412,7 @@ bool grab(FILE_HANDLE* fp) {
     return false;
 }
 
-void seek_only(FILE_HANDLE* fp, int frame) {
+void seek_only(FILE_HANDLE* fp, int64_t frame) {
     int64_t time_stamp = (int64_t)((int64_t)frame * 1000000 / ((double)fp->video_stream->avg_frame_rate.num / fp->video_stream->avg_frame_rate.den)) + fp->format_context->start_time;
     avformat_seek_file(fp->format_context, -1, INT64_MIN, time_stamp, INT64_MAX, AVSEEK_FLAG_BACKWARD);
     avcodec_flush_buffers(fp->video_codec_context);
@@ -422,7 +422,7 @@ void seek_only(FILE_HANDLE* fp, int frame) {
 void seek(FILE_HANDLE* fp, int frame) {
     seek_only(fp, frame);
     // 移動先が目的地より進んでいることがあるためその場合は戻る
-    int f = frame - (fp->video_now_frame - frame) - 3;
+    int64_t f = frame - (fp->video_now_frame - frame) - 3;
     while (fp->video_now_frame > frame) {
         if (f < 0) f = 0;
         seek_only(fp, f);
