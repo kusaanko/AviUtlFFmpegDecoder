@@ -217,46 +217,46 @@ void reload_config() {
         }
     }
 
-    const char* data = read_config("decoder", "yuy2", "true").c_str();
-    if (!strcmp(data, "true")) {
+    std::string data = read_config("decoder", "yuy2", "true");
+    if (!strcmp(data.c_str(), "true")) {
         is_output_yuy2 = true;
     }
     else {
         is_output_yuy2 = false;
     }
-    data = read_config("decoder", "scaling_algorithm", "BICUBIC").c_str();
+    data = read_config("decoder", "scaling_algorithm", "BICUBIC");
     scaling_algorithm = 0;
-    if (!strcmp(data, "FAST_BILINEAR")) {
+    if (!strcmp(data.c_str(), "FAST_BILINEAR")) {
         scaling_algorithm = SWS_FAST_BILINEAR;
     }
-    if (!strcmp(data, "BILINEAR")) {
+    if (!strcmp(data.c_str(), "BILINEAR")) {
         scaling_algorithm = SWS_BILINEAR;
     }
-    if (!strcmp(data, "BICUBIC")) {
+    if (!strcmp(data.c_str(), "BICUBIC")) {
         scaling_algorithm = SWS_BICUBIC;
     }
-    if (!strcmp(data, "X")) {
+    if (!strcmp(data.c_str(), "X")) {
         scaling_algorithm = SWS_X;
     }
-    if (!strcmp(data, "POINT")) {
+    if (!strcmp(data.c_str(), "POINT")) {
         scaling_algorithm = SWS_POINT;
     }
-    if (!strcmp(data, "AREA")) {
+    if (!strcmp(data.c_str(), "AREA")) {
         scaling_algorithm = SWS_AREA;
     }
-    if (!strcmp(data, "BICUBLIN")) {
+    if (!strcmp(data.c_str(), "BICUBLIN")) {
         scaling_algorithm = SWS_BICUBLIN;
     }
-    if (!strcmp(data, "GAUSS")) {
+    if (!strcmp(data.c_str(), "GAUSS")) {
         scaling_algorithm = SWS_GAUSS;
     }
-    if (!strcmp(data, "SINC")) {
+    if (!strcmp(data.c_str(), "SINC")) {
         scaling_algorithm = SWS_SINC;
     }
-    if (!strcmp(data, "LANCZOS")) {
+    if (!strcmp(data.c_str(), "LANCZOS")) {
         scaling_algorithm = SWS_LANCZOS;
     }
-    if (!strcmp(data, "SPLINE")) {
+    if (!strcmp(data.c_str(), "SPLINE")) {
         scaling_algorithm = SWS_SPLINE;
     }
     if (scaling_algorithm == 0) {
@@ -341,11 +341,13 @@ BOOL func_info_get(INPUT_HANDLE ih, INPUT_INFO* iip)
 
     if (fp->video) {
         BITMAPINFOHEADER* header = new BITMAPINFOHEADER();
+        header->biCompression = MAKEFOURCC('B', 'G', 'R', 0);
         header->biWidth = fp->video_codec_context->width;
         header->biHeight = fp->video_codec_context->height;
         header->biBitCount = 24;
         if (fp->yuy2) {
             header->biCompression = MAKEFOURCC('Y', 'U', 'Y', '2');
+            header->biBitCount = 16;
         }
         iip->flag |= INPUT_INFO_FLAG_VIDEO | INPUT_INFO_FLAG_VIDEO_RANDOM_ACCESS;
         iip->rate = fp->video_stream->avg_frame_rate.num;
